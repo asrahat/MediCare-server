@@ -252,6 +252,63 @@ app.get("/payments/:userId", async (req, res) => {
 
 
 // Appoinements
+
+app.get("/appointments/user/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const appointments = await db
+      .collection("appointments")
+      .find({ userId })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.status(200).json({
+      success: true,
+      data: appointments,
+    });
+  } catch (error) {
+    console.error("Get appointments error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+// -----------
+app.get("/appointments/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const appointment = await db
+      .collection("appointments")
+      .findOne({
+        _id: new ObjectId(id),
+      });
+
+    if (!appointment) {
+      return res.status(404).json({
+        success: false,
+        message: "Appointment not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: appointment,
+    });
+  } catch (error) {
+    console.error("Get appointment error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+// ----------
 app.post("/appointments", async (req, res) => {
   try {
     const {
