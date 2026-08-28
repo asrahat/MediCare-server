@@ -36,7 +36,7 @@ async function run() {
     const paymentCollection = db.collection("payment");
     const appointmentsCollection = db.collection("appointments");
 
-    // doctors collectionz
+    // doctors collection
     app.get("/api/doctors", async (req, res) => {
       console.log("server side q", req.query);
 
@@ -164,7 +164,7 @@ async function run() {
     // });
 
 
-
+// payments
 app.post("/payment", async (req, res) => {
   try {
     const {
@@ -252,6 +252,90 @@ app.get("/payments/:userId", async (req, res) => {
 
 
 // Appoinements
+app.post("/appointments", async (req, res) => {
+  try {
+    const {
+      userId,
+      doctorId,
+      doctorName,
+      specialization,
+      hospitalName,
+      date,
+      availableSlot,
+      symptoms,
+      consultationFee,
+      paymentStatus,
+      appointmentStatus,
+      session_id,
+    } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "userId is required",
+      });
+    }
+
+    if (!doctorId) {
+      return res.status(400).json({
+        success: false,
+        message: "doctorId is required",
+      });
+    }
+
+    if (!date) {
+      return res.status(400).json({
+        success: false,
+        message: "Appointment date is required",
+      });
+    }
+
+    if (!availableSlot) {
+      return res.status(400).json({
+        success: false,
+        message: "Appointment slot is required",
+      });
+    }
+
+    const newAppointment = {
+      userId,
+      doctorId,
+      doctorName,
+      specialization,
+      hospitalName,
+      date,
+      availableSlot,
+      symptoms,
+      consultationFee: Number(consultationFee || 0),
+      paymentStatus: paymentStatus || "unpaid",
+      appointmentStatus: appointmentStatus || "confirmed",
+      session_id: session_id || null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const result = await db
+      .collection("appointments")
+      .insertOne(newAppointment);
+
+    res.status(201).json({
+      success: true,
+      message: "Appointment created successfully",
+      data: {
+        _id: result.insertedId,
+        ...newAppointment,
+      },
+    });
+  } catch (error) {
+    console.error("Create appointment error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
 
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!",
