@@ -307,7 +307,7 @@ app.get("/appointments/:id", async (req, res) => {
     });
   }
 });
-
+git 
 // ----------
 app.post("/appointments", async (req, res) => {
   try {
@@ -392,7 +392,89 @@ app.post("/appointments", async (req, res) => {
     });
   }
 });
+// ----------
+app.patch("/appointments/:id/reschedule", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { date, availableSlot } = req.body;
 
+    if (!date) {
+      return res.status(400).json({
+        success: false,
+        message: "New date is required",
+      });
+    }
+
+    if (!availableSlot) {
+      return res.status(400).json({
+        success: false,
+        message: "New time slot is required",
+      });
+    }
+
+    const appointment = await db
+      .collection("appointments")
+      .findOne({
+        _id: new ObjectId(id),
+      });
+
+    if (!appointment) {
+      return res.status(404).json({
+        success: false,
+        message: "Appointment not found",
+      });
+    }
+
+    if (appointment.appointmentStatus === "cancelled") {
+      return res.status(400).json({
+        success: false,
+        message: "Cancelled appointment cannot be rescheduled",
+      });
+    }
+
+    const result = await db
+      .collection("appointments")
+      .updateOne(
+        {
+          _id: new ObjectId(id),
+        },
+        {
+          $set: {
+            date,
+            availableSlot,
+            appointmentStatus: "rescheduled",
+            updatedAt: new Date(),
+          },
+        }
+      );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Appointment not found",
+      });
+    }
+
+    const updatedAppointment = await db
+      .collection("appointments")
+      .findOne({
+        _id: new ObjectId(id),
+      });
+
+    res.status(200).json({
+      success: true,
+      message: "Appointment rescheduled successfully",
+      data: updatedAppointment,
+    });
+  } catch (error) {
+    console.error("Reschedule appointment error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
 
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!",
