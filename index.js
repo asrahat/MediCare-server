@@ -1,8 +1,14 @@
 const express = require("express");
 const dotenv = require("dotenv");
-const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-dotenv.config();
+const {
+  MongoClient,
+  ServerApiVersion,
+  ObjectId,
+} = require("mongodb");
 const cors = require("cors");
+
+dotenv.config();
+
 const app = express();
 const port = 5000;
 
@@ -15,7 +21,6 @@ app.get("/", (req, res) => {
 
 const uri = process.env.MONGODB_URI;
 
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -26,518 +31,950 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    // Connect the client to the server	(optional starting in v4.7)
-    // await client.connect();
-    // Send a ping to confirm a successful connection
-    // await client.db("admin").command({ ping: 1 });
+    const db = client.db("mediCareDB");
 
-    const db = await client.db("mediCareDB");
-    const doctorsCollection = await db.collection("doctors");
+ 
+    const doctorsCollection = db.collection("doctors");
     const paymentCollection = db.collection("payment");
-    const appointmentsCollection = db.collection("appointments");
+    const appointmentsCollection =
+      db.collection("appointments");
 
-    // doctors collection
+  
     app.get("/api/doctors", async (req, res) => {
-      console.log("server side q", req.query);
+      try {
+        console.log("Server side query:", req.query);
 
-      const query = {};
+        const query = {};
 
-      // -------------------------
-      // SEARCH (like jobs search)
-      // -------------------------
-      if (req.query.search) {
-        query.$or = [
-          {
-            doctorName: {
-              $regex: req.query.search,
-              $options: "i",
+     
+        if (req.query.search) {
+          query.$or = [
+            {
+              doctorName: {
+                $regex: req.query.search,
+                $options: "i",
+              },
             },
-          },
-          {
-            specialization: {
-              $regex: req.query.search,
-              $options: "i",
+            {
+              specialization: {
+                $regex: req.query.search,
+                $options: "i",
+              },
             },
-          },
-          {
-            hospitalName: {
-              $regex: req.query.search,
-              $options: "i",
+            {
+              hospitalName: {
+                $regex: req.query.search,
+                $options: "i",
+              },
             },
-          },
-        ];
-      }
+          ];
+        }
 
-      // -------------------------
-      // FILTERS
-      // -------------------------
-      if (req.query.specialization) {
-        query.specialization = req.query.specialization;
-      }
+       
+        if (req.query.specialization) {
+          query.specialization =
+            req.query.specialization;
+        }
 
-      if (req.query.verificationStatus) {
-        query.verificationStatus = req.query.verificationStatus;
-      }
+      
+        if (req.query.verificationStatus) {
+          query.verificationStatus =
+            req.query.verificationStatus;
+        }
 
-      if (req.query.experience) {
-        query.experience = { $gte: Number(req.query.experience) };
-      }
+        if (req.query.experience) {
+          query.experience = {
+            $gte: Number(req.query.experience),
+          };
+        }
 
-      if (req.query.minFee && req.query.maxFee) {
-        query.consultationFee = {
-          $gte: Number(req.query.minFee),
-          $lte: Number(req.query.maxFee),
-        };
-      }
+        if (
+          req.query.minFee &&
+          req.query.maxFee
+        ) {
+          query.consultationFee = {
+            $gte: Number(req.query.minFee),
+            $lte: Number(req.query.maxFee),
+          };
+        }
 
-      // -------------------------
-      // PAGINATION (same style as jobs)
-      // -------------------------
-      if (req.query.page) {
-        const page = parseInt(req.query.page);
-        const perPage = parseInt(req.query.perPage || 12);
-        const skipItems = (page - 1) * perPage;
+        if (req.query.page) {
+          const page = parseInt(req.query.page);
+          const perPage = parseInt(
+            req.query.perPage || 12
+          );
 
-        const total = await doctorsCollection.countDocuments(query);
+          const skipItems =
+            (page - 1) * perPage;
 
-        const cursor = doctorsCollection
-          .find(query)
-          .skip(skipItems)
-          .limit(perPage);
+          const total =
+            await doctorsCollection.countDocuments(
+              query
+            );
 
-        const doctors = await cursor.toArray();
+          const doctors =
+            await doctorsCollection
+              .find(query)
+              .skip(skipItems)
+              .limit(perPage)
+              .toArray();
 
-        return res.send({
-          total,
-          doctors,
-          page,
-          perPage,
+          return res.status(200).json({
+            success: true,
+            total,
+            doctors,
+            page,
+            perPage,
+          });
+        }
+
+        const doctors =
+          await doctorsCollection
+            .find(query)
+            .toArray();
+
+        return res.status(200).json({
+          success: true,
+          data: doctors,
+        });
+      } catch (error) {
+        console.error(
+          "Get doctors error:",
+          error
+        );
+
+        return res.status(500).json({
+          success: false,
+          message: error.message,
         });
       }
-
-      // -------------------------
-      // DEFAULT (NO PAGINATION)
-      // -------------------------
-      const cursor = doctorsCollection.find(query);
-      const result = await cursor.toArray();
-
-      res.send(result);
     });
 
-    app.get("/api/doctors/:id", async (req, res) => {
+    app.get(
+      "/api/doctors/:id",
+      async (req, res) => {
+        try {
+          const { id } = req.params;
+
+          if (!ObjectId.isValid(id)) {
+            return res.status(400).json({
+              success: false,
+              message:
+                "Invalid doctor ID",
+            });
+          }
+
+          const doctor =
+            await doctorsCollection.findOne({
+              _id: new ObjectId(id),
+            });
+
+          if (!doctor) {
+            return res.status(404).json({
+              success: false,
+              message:
+                "Doctor not found",
+            });
+          }
+
+          return res.status(200).json({
+            success: true,
+            data: doctor,
+          });
+        } catch (error) {
+          console.error(
+            "Get doctor error:",
+            error
+          );
+
+          return res.status(500).json({
+            success: false,
+            message: error.message,
+          });
+        }
+      }
+    );
+
+    app.post("/payment", async (req, res) => {
       try {
-        const id = req.params.id;
+        const {
+          userId,
+          doctorId,
+          doctorName,
+          specialization,
+          hospitalName,
+          date,
+          availableSlot,
+          symptoms,
+          consultationFee,
+          session_id,
+          status,
+        } = req.body;
 
-        const query = {
-          _id: new ObjectId(id),
-        };
+        console.log(
+          "======================================"
+        );
+        console.log(
+          "Payment request:",
+          req.body
+        );
+        console.log(
+          "======================================"
+        );
 
-        const result = await doctorsCollection.findOne(query);
-
-        if (!result) {
-          return res.status(404).send({ message: "Doctor not found" });
+   
+        if (!userId) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "userId is required",
+          });
         }
 
-        res.send(result);
+        if (!session_id) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "session_id is required",
+          });
+        }
+
+        if (!doctorId) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "doctorId is required",
+          });
+        }
+
+        if (!date) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Appointment date is required",
+          });
+        }
+
+        if (!availableSlot) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Appointment slot is required",
+          });
+        }
+
+        const existingPayment =
+          await paymentCollection.findOne({
+            session_id,
+          });
+
+        if (existingPayment) {
+          return res.status(200).json({
+            success: true,
+            message:
+              "Payment already exists",
+            data: existingPayment,
+          });
+        }
+
+ 
+        const newPayment = {
+          userId: String(userId),
+
+          doctorId: String(doctorId),
+
+          doctorName:
+            doctorName || "",
+
+          specialization:
+            specialization || "",
+
+          hospitalName:
+            hospitalName || "",
+
+          date,
+
+          availableSlot,
+
+          symptoms:
+            symptoms || "",
+
+          consultationFee:
+            Number(consultationFee || 0),
+
+          session_id,
+
+          paymentStatus:
+            status || "paid",
+
+          createdAt:
+            new Date(),
+
+          updatedAt:
+            new Date(),
+        };
+
+        const paymentResult =
+          await paymentCollection.insertOne(
+            newPayment
+          );
+
+        const existingAppointment =
+          await appointmentsCollection.findOne({
+            session_id,
+          });
+
+        let appointmentData;
+
+        if (existingAppointment) {
+          appointmentData =
+            existingAppointment;
+        } else {
+          const newAppointment = {
+            userId: String(userId),
+
+            doctorId: String(doctorId),
+
+            doctorName:
+              doctorName || "",
+
+            specialization:
+              specialization || "",
+
+            hospitalName:
+              hospitalName || "",
+
+            date,
+
+            availableSlot,
+
+            symptoms:
+              symptoms || "",
+
+            consultationFee:
+              Number(consultationFee || 0),
+
+     
+            paymentStatus:
+              status || "paid",
+
+            appointmentStatus:
+              "confirmed",
+
+            session_id,
+
+            createdAt:
+              new Date(),
+
+            updatedAt:
+              new Date(),
+          };
+
+          const appointmentResult =
+            await appointmentsCollection.insertOne(
+              newAppointment
+            );
+
+          appointmentData = {
+            _id:
+              appointmentResult.insertedId,
+            ...newAppointment,
+          };
+        }
+
+    
+        return res.status(201).json({
+          success: true,
+
+          message:
+            "Payment and appointment saved successfully",
+
+          data: {
+            payment: {
+              _id:
+                paymentResult.insertedId,
+              ...newPayment,
+            },
+
+            appointment:
+              appointmentData,
+          },
+        });
       } catch (error) {
-        console.error("GET doctor by id error:", error);
-        res.status(500).send({ message: "Server error" });
+        console.error(
+          "Payment API Error:",
+          error
+        );
+
+        return res.status(500).json({
+          success: false,
+          message: error.message,
+        });
       }
     });
 
-    // app.post("/api/doctors", async (req, res) => {
-    //   try {
-    //     const doctor = req.body;
 
-    //     const newDoctor = {
-    //       ...doctor,
-    //       createdAt: new Date(),
-    //     };
+    app.get(
+      "/payments/:userId",
+      async (req, res) => {
+        try {
+          const { userId } =
+            req.params;
 
-    //     const result = await doctorsCollection.insertOne(newDoctor);
+          console.log(
+            "Payment userId:",
+            userId
+          );
 
-    //     res.send(result);
-    //   } catch (error) {
-    //     console.error("POST doctor error:", error);
-    //     res.status(500).send({ message: "Server error" });
-    //   }
-    // });
+          if (!userId) {
+            return res.status(400).json({
+              success: false,
+              message:
+                "userId is required",
+            });
+          }
 
+          const payments =
+            await paymentCollection
+              .find({
+                userId: String(userId),
+              })
+              .sort({
+                createdAt: -1,
+              })
+              .toArray();
 
-// payments
-app.post("/payment", async (req, res) => {
-  try {
-    const {
-      userId,
-      date,
-      availableSlots,
-      symptoms,
-      consultationFee,
-      doctorName,
-      session_id,
-      status,
-    } = req.body;
+          return res.status(200).json({
+            success: true,
+            data: payments,
+          });
+        } catch (error) {
+          console.error(
+            "Get payments error:",
+            error
+          );
 
-    console.log("Payment request:", req.body);
+          return res.status(500).json({
+            success: false,
+            message: error.message,
+          });
+        }
+      }
+    );
 
-    if (!session_id) {
-      return res.status(400).json({
-        success: false,
-        message: "session_id is required",
-      });
-    }
+    app.get(
+      "/appointments/user/:userId",
+      async (req, res) => {
+        try {
+          const { userId } =
+            req.params;
 
-    const isExistSession = await paymentCollection.findOne({
-      session_id,
-    });
+          console.log(
+            "======================================"
+          );
 
-    if (isExistSession) {
-      return res.status(400).json({
-        success: false,
-        message: "Session already exists",
-      });
-    }
+          console.log(
+            "Requested appointment userId:",
+            userId
+          );
 
-    const pay_result = await paymentCollection.insertOne({
-      userId,
-      date,
-      availableSlots,
-      symptoms,
-      consultationFee: Number(consultationFee),
-      doctorName,
-      session_id,
-      status,
-      createdAt: new Date(),
-    });
+          if (!userId) {
+            return res.status(400).json({
+              success: false,
+              message:
+                "userId is required",
+            });
+          }
 
-    return res.status(201).json({
-      success: true,
-      message: "Payment saved successfully",
-      data: pay_result,
-    });
-  } catch (error) {
-    console.error("Payment API Error:", error);
+          const appointments =
+            await appointmentsCollection
+              .find({
+                userId: String(userId),
+              })
+              .sort({
+                createdAt: -1,
+              })
+              .toArray();
 
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
+          console.log(
+            "Appointments found:",
+            appointments.length
+          );
 
-app.get("/payments/:userId", async (req, res) => {
-  try {
-    const userId = req.params.userId;
+          console.log(
+            "Appointments:",
+            appointments
+          );
 
-    const payments = await paymentCollection
-      .find({ userId })
-      .sort({ createdAt: -1 })
-      .toArray();
+          console.log(
+            "======================================"
+          );
 
-    res.status(200).json({
-      success: true,
-      data: payments,
-    });
-  } catch (error) {
-    console.error("Get payments error:", error);
+          return res.status(200).json({
+            success: true,
+            data: appointments,
+          });
+        } catch (error) {
+          console.error(
+            "Get appointments error:",
+            error
+          );
 
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
+          return res.status(500).json({
+            success: false,
+            message: error.message,
+          });
+        }
+      }
+    );
 
+    app.get(
+      "/appointments/:id",
+      async (req, res) => {
+        try {
+          const { id } =
+            req.params;
 
-});
+          if (!ObjectId.isValid(id)) {
+            return res.status(400).json({
+              success: false,
+              message:
+                "Invalid appointment ID",
+            });
+          }
 
+          const appointment =
+            await appointmentsCollection.findOne(
+              {
+                _id: new ObjectId(id),
+              }
+            );
 
-// Appoinements
+          if (!appointment) {
+            return res.status(404).json({
+              success: false,
+              message:
+                "Appointment not found",
+            });
+          }
 
-app.get("/appointments/user/:userId", async (req, res) => {
-  try {
-    const { userId } = req.params;
+          return res.status(200).json({
+            success: true,
+            data: appointment,
+          });
+        } catch (error) {
+          console.error(
+            "Get appointment error:",
+            error
+          );
 
-    const appointments = await db
-      .collection("appointments")
-      .find({ userId })
-      .sort({ createdAt: -1 })
-      .toArray();
+          return res.status(500).json({
+            success: false,
+            message: error.message,
+          });
+        }
+      }
+    );
 
-    res.status(200).json({
-      success: true,
-      data: appointments,
-    });
-  } catch (error) {
-    console.error("Get appointments error:", error);
-
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
-// -----------
-app.get("/appointments/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const appointment = await db
-      .collection("appointments")
-      .findOne({
-        _id: new ObjectId(id),
-      });
-
-    if (!appointment) {
-      return res.status(404).json({
-        success: false,
-        message: "Appointment not found",
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: appointment,
-    });
-  } catch (error) {
-    console.error("Get appointment error:", error);
-
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
-git 
-// ----------
-app.post("/appointments", async (req, res) => {
-  try {
-    const {
-      userId,
-      doctorId,
-      doctorName,
-      specialization,
-      hospitalName,
-      date,
-      availableSlot,
-      symptoms,
-      consultationFee,
-      paymentStatus,
-      appointmentStatus,
-      session_id,
-    } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        message: "userId is required",
-      });
-    }
-
-    if (!doctorId) {
-      return res.status(400).json({
-        success: false,
-        message: "doctorId is required",
-      });
-    }
-
-    if (!date) {
-      return res.status(400).json({
-        success: false,
-        message: "Appointment date is required",
-      });
-    }
-
-    if (!availableSlot) {
-      return res.status(400).json({
-        success: false,
-        message: "Appointment slot is required",
-      });
-    }
-
-    const newAppointment = {
-      userId,
-      doctorId,
-      doctorName,
-      specialization,
-      hospitalName,
-      date,
-      availableSlot,
-      symptoms,
-      consultationFee: Number(consultationFee || 0),
-      paymentStatus: paymentStatus || "unpaid",
-      appointmentStatus: appointmentStatus || "confirmed",
-      session_id: session_id || null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    const result = await db
-      .collection("appointments")
-      .insertOne(newAppointment);
-
-    res.status(201).json({
-      success: true,
-      message: "Appointment created successfully",
-      data: {
-        _id: result.insertedId,
-        ...newAppointment,
-      },
-    });
-  } catch (error) {
-    console.error("Create appointment error:", error);
-
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
-// ----------
-app.patch("/appointments/:id/reschedule", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { date, availableSlot } = req.body;
-
-    if (!date) {
-      return res.status(400).json({
-        success: false,
-        message: "New date is required",
-      });
-    }
-
-    if (!availableSlot) {
-      return res.status(400).json({
-        success: false,
-        message: "New time slot is required",
-      });
-    }
-
-    const appointment = await db
-      .collection("appointments")
-      .findOne({
-        _id: new ObjectId(id),
-      });
-
-    if (!appointment) {
-      return res.status(404).json({
-        success: false,
-        message: "Appointment not found",
-      });
-    }
-
-    if (appointment.appointmentStatus === "cancelled") {
-      return res.status(400).json({
-        success: false,
-        message: "Cancelled appointment cannot be rescheduled",
-      });
-    }
-
-    const result = await db
-      .collection("appointments")
-      .updateOne(
-        {
-          _id: new ObjectId(id),
-        },
-        {
-          $set: {
+    app.post(
+      "/appointments",
+      async (req, res) => {
+        try {
+          const {
+            userId,
+            doctorId,
+            doctorName,
+            specialization,
+            hospitalName,
             date,
             availableSlot,
-            appointmentStatus: "rescheduled",
-            updatedAt: new Date(),
-          },
+            symptoms,
+            consultationFee,
+            paymentStatus,
+            appointmentStatus,
+            session_id,
+          } = req.body;
+
+          console.log(
+            "Create appointment request:",
+            req.body
+          );
+
+          if (!userId) {
+            return res.status(400).json({
+              success: false,
+              message:
+                "userId is required",
+            });
+          }
+
+          if (!doctorId) {
+            return res.status(400).json({
+              success: false,
+              message:
+                "doctorId is required",
+            });
+          }
+
+          if (!date) {
+            return res.status(400).json({
+              success: false,
+              message:
+                "Appointment date is required",
+            });
+          }
+
+          if (!availableSlot) {
+            return res.status(400).json({
+              success: false,
+              message:
+                "Appointment slot is required",
+            });
+          }
+
+          if (session_id) {
+            const existing =
+              await appointmentsCollection.findOne(
+                {
+                  session_id,
+                }
+              );
+
+            if (existing) {
+              return res.status(200).json({
+                success: true,
+                message:
+                  "Appointment already exists",
+                data: existing,
+              });
+            }
+          }
+
+          const newAppointment = {
+            userId: String(userId),
+
+            doctorId: String(doctorId),
+
+            doctorName:
+              doctorName || "",
+
+            specialization:
+              specialization || "",
+
+            hospitalName:
+              hospitalName || "",
+
+            date,
+
+            availableSlot,
+
+            symptoms:
+              symptoms || "",
+
+            consultationFee:
+              Number(
+                consultationFee || 0
+              ),
+
+            paymentStatus:
+              paymentStatus || "unpaid",
+
+            appointmentStatus:
+              appointmentStatus ||
+              "confirmed",
+
+            session_id:
+              session_id || null,
+
+            createdAt:
+              new Date(),
+
+            updatedAt:
+              new Date(),
+          };
+
+          const result =
+            await appointmentsCollection.insertOne(
+              newAppointment
+            );
+
+          return res.status(201).json({
+            success: true,
+
+            message:
+              "Appointment created successfully",
+
+            data: {
+              _id:
+                result.insertedId,
+
+              ...newAppointment,
+            },
+          });
+        } catch (error) {
+          console.error(
+            "Create appointment error:",
+            error
+          );
+
+          return res.status(500).json({
+            success: false,
+            message: error.message,
+          });
         }
-      );
+      }
+    );
 
-    if (result.matchedCount === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Appointment not found",
-      });
-    }
+    app.patch(
+      "/appointments/:id/reschedule",
+      async (req, res) => {
+        try {
+          const { id } =
+            req.params;
 
-    const updatedAppointment = await db
-      .collection("appointments")
-      .findOne({
-        _id: new ObjectId(id),
-      });
+          const {
+            date,
+            availableSlot,
+          } = req.body;
 
-    res.status(200).json({
-      success: true,
-      message: "Appointment rescheduled successfully",
-      data: updatedAppointment,
-    });
-  } catch (error) {
-    console.error("Reschedule appointment error:", error);
+          console.log(
+            "Reschedule request:",
+            req.body
+          );
 
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
-// ------------
-app.patch("/appointments/:id/cancel", async (req, res) => {
-  try {
-    const { id } = req.params;
+          if (!ObjectId.isValid(id)) {
+            return res.status(400).json({
+              success: false,
+              message:
+                "Invalid appointment ID",
+            });
+          }
 
-    const appointment = await db
-      .collection("appointments")
-      .findOne({
-        _id: new ObjectId(id),
-      });
+          if (!date) {
+            return res.status(400).json({
+              success: false,
+              message:
+                "New date is required",
+            });
+          }
 
-    if (!appointment) {
-      return res.status(404).json({
-        success: false,
-        message: "Appointment not found",
-      });
-    }
+          if (!availableSlot) {
+            return res.status(400).json({
+              success: false,
+              message:
+                "New time slot is required",
+            });
+          }
 
-    if (appointment.appointmentStatus === "cancelled") {
-      return res.status(400).json({
-        success: false,
-        message: "Appointment is already cancelled",
-      });
-    }
+          const appointment =
+            await appointmentsCollection.findOne(
+              {
+                _id: new ObjectId(id),
+              }
+            );
 
-    const result = await db
-      .collection("appointments")
-      .updateOne(
-        {
-          _id: new ObjectId(id),
-        },
-        {
-          $set: {
-            appointmentStatus: "cancelled",
-            updatedAt: new Date(),
-          },
+          if (!appointment) {
+            return res.status(404).json({
+              success: false,
+              message:
+                "Appointment not found",
+            });
+          }
+
+          if (
+            String(
+              appointment.appointmentStatus
+            ).toLowerCase() ===
+            "cancelled"
+          ) {
+            return res.status(400).json({
+              success: false,
+              message:
+                "Cancelled appointment cannot be rescheduled",
+            });
+          }
+
+       
+          const result =
+            await appointmentsCollection.updateOne(
+              {
+                _id: new ObjectId(id),
+              },
+              {
+                $set: {
+                  date,
+
+                  availableSlot,
+
+                  appointmentStatus:
+                    "rescheduled",
+
+                  updatedAt:
+                    new Date(),
+                },
+              }
+            );
+
+          if (
+            result.matchedCount ===
+            0
+          ) {
+            return res.status(404).json({
+              success: false,
+              message:
+                "Appointment not found",
+            });
+          }
+
+          const updatedAppointment =
+            await appointmentsCollection.findOne(
+              {
+                _id: new ObjectId(id),
+              }
+            );
+
+          return res.status(200).json({
+            success: true,
+
+            message:
+              "Appointment rescheduled successfully",
+
+            data:
+              updatedAppointment,
+          });
+        } catch (error) {
+          console.error(
+            "Reschedule appointment error:",
+            error
+          );
+
+          return res.status(500).json({
+            success: false,
+            message: error.message,
+          });
         }
-      );
+      }
+    );
 
-    res.status(200).json({
-      success: true,
-      message: "Appointment cancelled successfully",
-    });
-  } catch (error) {
-    console.error("Cancel appointment error:", error);
+ 
+    app.patch(
+      "/appointments/:id/cancel",
+      async (req, res) => {
+        try {
+          const { id } =
+            req.params;
 
-    res.status(500).json({
-      success: false,
-      message: error.message,
+          console.log(
+            "Cancel appointment ID:",
+            id
+          );
+
+
+          if (!ObjectId.isValid(id)) {
+            return res.status(400).json({
+              success: false,
+              message:
+                "Invalid appointment ID",
+            });
+          }
+
+          const appointment =
+            await appointmentsCollection.findOne(
+              {
+                _id: new ObjectId(id),
+              }
+            );
+
+          if (!appointment) {
+            return res.status(404).json({
+              success: false,
+              message:
+                "Appointment not found",
+            });
+          }
+
+          if (
+            String(
+              appointment.appointmentStatus
+            ).toLowerCase() ===
+              "cancelled" ||
+            String(
+              appointment.appointmentStatus
+            ).toLowerCase() ===
+              "canceled"
+          ) {
+            return res.status(400).json({
+              success: false,
+              message:
+                "Appointment is already cancelled",
+            });
+          }
+
+          await appointmentsCollection.updateOne(
+            {
+              _id: new ObjectId(id),
+            },
+            {
+              $set: {
+                appointmentStatus:
+                  "cancelled",
+
+                updatedAt:
+                  new Date(),
+              },
+            }
+          );
+
+          const updatedAppointment =
+            await appointmentsCollection.findOne(
+              {
+                _id: new ObjectId(id),
+              }
+            );
+
+          return res.status(200).json({
+            success: true,
+
+            message:
+              "Appointment cancelled successfully",
+
+            data:
+              updatedAppointment,
+          });
+        } catch (error) {
+          console.error(
+            "Cancel appointment error:",
+            error
+          );
+
+          return res.status(500).json({
+            success: false,
+            message: error.message,
+          });
+        }
+      }
+    );
+
+    await client.db("admin").command({
+      ping: 1,
     });
-  }
-});
 
     console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!",
+      "Pinged your deployment. You successfully connected to MongoDB!"
     );
-  } finally {
-    // Ensures that the client will close when you finish/error
-    // await client.close();
+  } catch (error) {
+    console.error(
+      "MongoDB connection error:",
+      error
+    );
   }
 }
+
 run().catch(console.dir);
 
+
 app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`);
+  console.log(
+    `Example app listening on port ${port}`
+  );
 });
