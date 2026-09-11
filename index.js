@@ -38,162 +38,201 @@ async function run() {
     const paymentCollection = db.collection("payment");
     const appointmentsCollection =
       db.collection("appointments");
+const reviewsCollection =
+  db.collection("reviews");
+  const schedulesCollection = db.collection("schedules"); 
 
   
     app.get("/api/doctors", async (req, res) => {
-      try {
-        console.log("Server side query:", req.query);
+  try {
+    console.log("Server side query:", req.query);
 
-        const query = {};
+    const query = {};
 
-     
-        if (req.query.search) {
-          query.$or = [
-            {
-              doctorName: {
-                $regex: req.query.search,
-                $options: "i",
-              },
-            },
-            {
-              specialization: {
-                $regex: req.query.search,
-                $options: "i",
-              },
-            },
-            {
-              hospitalName: {
-                $regex: req.query.search,
-                $options: "i",
-              },
-            },
-          ];
-        }
+    // -------------------------------------------------
+    // Search
+    // -------------------------------------------------
 
-       
-        if (req.query.specialization) {
-          query.specialization =
-            req.query.specialization;
-        }
+    if (req.query.search) {
+      query.$or = [
+        {
+          doctorName: {
+            $regex: req.query.search,
+            $options: "i",
+          },
+        },
+        {
+          specialization: {
+            $regex: req.query.search,
+            $options: "i",
+          },
+        },
+        {
+          hospitalName: {
+            $regex: req.query.search,
+            $options: "i",
+          },
+        },
+      ];
+    }
 
-      
-        if (req.query.verificationStatus) {
-          query.verificationStatus =
-            req.query.verificationStatus;
-        }
+    // -------------------------------------------------
+    // Specialization
+    // -------------------------------------------------
 
-        if (req.query.experience) {
-          query.experience = {
-            $gte: Number(req.query.experience),
-          };
-        }
+    if (req.query.specialization) {
+      query.specialization = req.query.specialization;
+    }
 
-        if (
-          req.query.minFee &&
-          req.query.maxFee
-        ) {
-          query.consultationFee = {
-            $gte: Number(req.query.minFee),
-            $lte: Number(req.query.maxFee),
-          };
-        }
+    // -------------------------------------------------
+    // Verification Status
+    // -------------------------------------------------
 
-        if (req.query.page) {
-          const page = parseInt(req.query.page);
-          const perPage = parseInt(
-            req.query.perPage || 12
-          );
+    if (req.query.verificationStatus) {
+      query.verificationStatus =
+        req.query.verificationStatus;
+    }
 
-          const skipItems =
-            (page - 1) * perPage;
+    // -------------------------------------------------
+    // Experience
+    // -------------------------------------------------
 
-          const total =
-            await doctorsCollection.countDocuments(
-              query
-            );
+    if (req.query.experience) {
+      query.experience = {
+        $gte: Number(req.query.experience),
+      };
+    }
 
-          const doctors =
-            await doctorsCollection
-              .find(query)
-              .skip(skipItems)
-              .limit(perPage)
-              .toArray();
+    // -------------------------------------------------
+    // Consultation Fee
+    // -------------------------------------------------
 
-          return res.status(200).json({
-            success: true,
-            total,
-            doctors,
-            page,
-            perPage,
-          });
-        }
+    if (req.query.minFee && req.query.maxFee) {
+      query.consultationFee = {
+        $gte: Number(req.query.minFee),
+        $lte: Number(req.query.maxFee),
+      };
+    }
 
-        const doctors =
-          await doctorsCollection
-            .find(query)
-            .toArray();
+    // =================================================
+    // Pagination
+    // =================================================
 
-        return res.status(200).json({
-          success: true,
-          data: doctors,
-        });
-      } catch (error) {
-        console.error(
-          "Get doctors error:",
-          error
-        );
+    if (req.query.page) {
+      const page = Math.max(
+        parseInt(req.query.page) || 1,
+        1
+      );
 
-        return res.status(500).json({
-          success: false,
-          message: error.message,
-        });
-      }
+      const perPage = Math.max(
+        parseInt(req.query.perPage) || 12,
+        1
+      );
+
+      const skipItems =
+        (page - 1) * perPage;
+
+      const total =
+        await doctorsCollection.countDocuments(query);
+
+      const doctors =
+        await doctorsCollection
+          .find(query)
+          .skip(skipItems)
+          .limit(perPage)
+          .toArray();
+
+      return res.status(200).json({
+        success: true,
+        total,
+        doctors,
+        page,
+        perPage,
+      });
+    }
+
+    // =================================================
+    // Get all doctors
+    // =================================================
+
+    const doctors =
+      await doctorsCollection
+        .find(query)
+        .toArray();
+
+    return res.status(200).json({
+      success: true,
+      data: doctors,
+    });
+  } catch (error) {
+    console.error(
+      "Get doctors error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to get doctors",
+      error: error.message,
+    });
+  }
+});
+
+
+// =====================================================
+// GET DOCTOR BY ID
+// =====================================================
+
+
+app.get("/api/doctors/:id", async (req, res) => {
+  try {
+    console.log("FULL PARAMS:", req.params);
+    console.log("DOCTOR ID:", req.params.id);
+
+    const id = req.params.id;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Doctor ID is missing",
+        params: req.params,
+      });
+    }
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid doctor ID",
+        id,
+      });
+    }
+
+    const doctor = await doctorsCollection.findOne({
+      _id: new ObjectId(id),
     });
 
-    app.get(
-      "/api/doctors/:id",
-      async (req, res) => {
-        try {
-          const { id } = req.params;
+    console.log("DOCTOR FOUND:", doctor);
 
-          if (!ObjectId.isValid(id)) {
-            return res.status(400).json({
-              success: false,
-              message:
-                "Invalid doctor ID",
-            });
-          }
+    if (!doctor) {
+      return res.status(404).json({
+        success: false,
+        message: "Doctor not found",
+      });
+    }
 
-          const doctor =
-            await doctorsCollection.findOne({
-              _id: new ObjectId(id),
-            });
+    return res.status(200).json({
+      success: true,
+      data: doctor,
+    });
+  } catch (error) {
+    console.error("GET DOCTOR ERROR:", error);
 
-          if (!doctor) {
-            return res.status(404).json({
-              success: false,
-              message:
-                "Doctor not found",
-            });
-          }
-
-          return res.status(200).json({
-            success: true,
-            data: doctor,
-          });
-        } catch (error) {
-          console.error(
-            "Get doctor error:",
-            error
-          );
-
-          return res.status(500).json({
-            success: false,
-            message: error.message,
-          });
-        }
-      }
-    );
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
 
     app.post("/payment", async (req, res) => {
       try {
@@ -954,6 +993,563 @@ async function run() {
         }
       }
     );
+
+    app.get("/api/reviews", async (req, res) => {
+  try {
+    const reviews =
+      await reviewsCollection
+        .find({})
+        .sort({ createdAt: -1 })
+        .toArray();
+
+    res.status(200).json({
+      success: true,
+      data: reviews,
+    });
+  } catch (error) {
+    console.error(
+      "Get reviews error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+app.get("/api/reviews", async (req, res) => {
+  try {
+    const reviews = await reviewsCollection
+      .find({})
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    return res.status(200).json({
+      success: true,
+      data: reviews,
+    });
+  } catch (error) {
+    console.error("Get reviews error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+app.post("/api/reviews", async (req, res) => {
+  try {
+    const {
+      doctorId,
+      rating,
+      comment,
+    } = req.body;
+
+    console.log("Create review body:", req.body);
+
+    if (!doctorId) {
+      return res.status(400).json({
+        success: false,
+        message: "Doctor ID is required",
+      });
+    }
+
+    if (!rating || Number(rating) < 1 || Number(rating) > 5) {
+      return res.status(400).json({
+        success: false,
+        message: "Rating must be between 1 and 5",
+      });
+    }
+
+    if (!comment?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Review comment is required",
+      });
+    }
+
+    const review = {
+      doctorId,
+      rating: Number(rating),
+      comment: comment.trim(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const result =
+      await reviewsCollection.insertOne(review);
+
+    const createdReview =
+      await reviewsCollection.findOne({
+        _id: result.insertedId,
+      });
+
+    return res.status(201).json({
+      success: true,
+      message: "Review created successfully",
+      data: createdReview,
+    });
+  } catch (error) {
+    console.error("Create review error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+app.patch(
+  "/api/reviews/:id",
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const {
+        doctorId,
+        rating,
+        comment,
+      } = req.body;
+
+
+      if (
+        !doctorId ||
+        !rating ||
+        !comment
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Doctor, rating and comment are required",
+        });
+      }
+
+
+      const doctor =
+        await doctorsCollection.findOne({
+          _id: doctorId,
+        });
+
+      if (!doctor) {
+        return res.status(404).json({
+          success: false,
+          message: "Doctor not found",
+        });
+      }
+
+
+      const updateData = {
+        doctorId,
+
+        doctorName:
+          doctor.doctorName,
+
+        specialization:
+          doctor.specialization,
+
+        rating: Number(rating),
+
+        comment: comment.trim(),
+
+        updatedAt: new Date(),
+      };
+
+
+      const result =
+        await reviewsCollection.updateOne(
+          {
+            _id: id,
+          },
+          {
+            $set: updateData,
+          }
+        );
+
+
+      if (!result.matchedCount) {
+        return res.status(404).json({
+          success: false,
+          message: "Review not found",
+        });
+      }
+
+
+      const updatedReview =
+        await reviewsCollection.findOne({
+          _id: id,
+        });
+
+
+      res.status(200).json({
+        success: true,
+        data: updatedReview,
+      });
+    } catch (error) {
+      console.error(
+        "Update review error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+);
+app.delete(
+  "/api/reviews/:id",
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+
+      const result =
+        await reviewsCollection.deleteOne({
+          _id: id,
+        });
+
+
+      if (!result.deletedCount) {
+        return res.status(404).json({
+          success: false,
+          message: "Review not found",
+        });
+      }
+
+
+      res.status(200).json({
+        success: true,
+        message: "Review deleted successfully",
+      });
+    } catch (error) {
+      console.error(
+        "Delete review error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+);
+
+
+// doctors
+app.get("/api/schedules/doctor/:doctorId", async (req, res) => {
+  try {
+    const { doctorId } = req.params;
+
+    if (!doctorId) {
+      return res.status(400).send({
+        success: false,
+        message: "Doctor ID is required",
+      });
+    }
+
+    const schedules = await schedulesCollection
+      .find({
+        doctorId: String(doctorId),
+      })
+      .sort({
+        day: 1,
+      })
+      .toArray();
+
+    res.send({
+      success: true,
+      data: schedules,
+    });
+  } catch (error) {
+    console.error("Get schedules error:", error);
+
+    res.status(500).send({
+      success: false,
+      message: "Failed to fetch schedules",
+    });
+  }
+});
+
+// ----------------
+app.post("/api/schedules", async (req, res) => {
+  try {
+    const {
+      doctorId,
+      day,
+      slots,
+    } = req.body;
+
+    if (!doctorId || !day || !Array.isArray(slots) || slots.length === 0) {
+      return res.status(400).send({
+        success: false,
+        message: "Doctor ID, day and slots are required",
+      });
+    }
+
+    const cleanSlots = [
+      ...new Set(
+        slots
+          .map((slot) => String(slot).trim())
+          .filter(Boolean)
+      ),
+    ];
+
+    if (cleanSlots.length === 0) {
+      return res.status(400).send({
+        success: false,
+        message: "At least one valid slot is required",
+      });
+    }
+
+    // Prevent duplicate schedule for same doctor + day
+    const existingSchedule = await schedulesCollection.findOne({
+      doctorId: String(doctorId),
+      day,
+    });
+
+    if (existingSchedule) {
+      return res.status(409).send({
+        success: false,
+        message: `${day} schedule already exists`,
+      });
+    }
+
+    const now = new Date();
+
+    const schedule = {
+      doctorId: String(doctorId),
+      day,
+      slots: cleanSlots,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const result = await schedulesCollection.insertOne(schedule);
+
+    res.status(201).send({
+      success: true,
+      message: "Schedule added successfully",
+      data: {
+        _id: result.insertedId,
+        ...schedule,
+      },
+    });
+  } catch (error) {
+    console.error("Add schedule error:", error);
+
+    res.status(500).send({
+      success: false,
+      message: "Failed to add schedule",
+    });
+  }
+});
+// ----------------
+app.post("/api/schedules", async (req, res) => {
+  try {
+    const {
+      doctorId,
+      day,
+      slots,
+    } = req.body;
+
+    if (!doctorId || !day || !Array.isArray(slots) || slots.length === 0) {
+      return res.status(400).send({
+        success: false,
+        message: "Doctor ID, day and slots are required",
+      });
+    }
+
+    const cleanSlots = [
+      ...new Set(
+        slots
+          .map((slot) => String(slot).trim())
+          .filter(Boolean)
+      ),
+    ];
+
+    if (cleanSlots.length === 0) {
+      return res.status(400).send({
+        success: false,
+        message: "At least one valid slot is required",
+      });
+    }
+
+    // Prevent duplicate schedule for same doctor + day
+    const existingSchedule = await schedulesCollection.findOne({
+      doctorId: String(doctorId),
+      day,
+    });
+
+    if (existingSchedule) {
+      return res.status(409).send({
+        success: false,
+        message: `${day} schedule already exists`,
+      });
+    }
+
+    const now = new Date();
+
+    const schedule = {
+      doctorId: String(doctorId),
+      day,
+      slots: cleanSlots,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const result = await schedulesCollection.insertOne(schedule);
+
+    res.status(201).send({
+      success: true,
+      message: "Schedule added successfully",
+      data: {
+        _id: result.insertedId,
+        ...schedule,
+      },
+    });
+  } catch (error) {
+    console.error("Add schedule error:", error);
+
+    res.status(500).send({
+      success: false,
+      message: "Failed to add schedule",
+    });
+  }
+});
+// __-------------
+app.patch("/api/schedules/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { day, slots } = req.body;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({
+        success: false,
+        message: "Invalid schedule ID",
+      });
+    }
+
+    if (!day || !Array.isArray(slots) || slots.length === 0) {
+      return res.status(400).send({
+        success: false,
+        message: "Day and slots are required",
+      });
+    }
+
+    const cleanSlots = [
+      ...new Set(
+        slots
+          .map((slot) => String(slot).trim())
+          .filter(Boolean)
+      ),
+    ];
+
+    const existingSchedule = await schedulesCollection.findOne({
+      _id: new ObjectId(id),
+    });
+
+    if (!existingSchedule) {
+      return res.status(404).send({
+        success: false,
+        message: "Schedule not found",
+      });
+    }
+
+    // Don't allow another schedule of the same doctor/day
+    const duplicateSchedule = await schedulesCollection.findOne({
+      doctorId: existingSchedule.doctorId,
+      day,
+      _id: {
+        $ne: new ObjectId(id),
+      },
+    });
+
+    if (duplicateSchedule) {
+      return res.status(409).send({
+        success: false,
+        message: `${day} schedule already exists`,
+      });
+    }
+
+    const result = await schedulesCollection.updateOne(
+      {
+        _id: new ObjectId(id),
+      },
+      {
+        $set: {
+          day,
+          slots: cleanSlots,
+          updatedAt: new Date(),
+        },
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).send({
+        success: false,
+        message: "Schedule not found",
+      });
+    }
+
+    const updatedSchedule = await schedulesCollection.findOne({
+      _id: new ObjectId(id),
+    });
+
+    res.send({
+      success: true,
+      message: "Schedule updated successfully",
+      data: updatedSchedule,
+    });
+  } catch (error) {
+    console.error("Update schedule error:", error);
+
+    res.status(500).send({
+      success: false,
+      message: "Failed to update schedule",
+    });
+  }
+});
+
+// -------
+app.delete("/api/schedules/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({
+        success: false,
+        message: "Invalid schedule ID",
+      });
+    }
+
+    const result = await schedulesCollection.deleteOne({
+      _id: new ObjectId(id),
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).send({
+        success: false,
+        message: "Schedule not found",
+      });
+    }
+
+    res.send({
+      success: true,
+      message: "Schedule removed successfully",
+    });
+  } catch (error) {
+    console.error("Delete schedule error:", error);
+
+    res.status(500).send({
+      success: false,
+      message: "Failed to remove schedule",
+    });
+  }
+});
+
 
     await client.db("admin").command({
       ping: 1,
